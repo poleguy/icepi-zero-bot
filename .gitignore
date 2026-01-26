@@ -1,0 +1,6 @@
+.env
+
+/__pycache__
+/output
+*.ghdl.v
+*.log

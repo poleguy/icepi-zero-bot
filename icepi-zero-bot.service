@@ -1,0 +1,15 @@
+[Unit]
+Description=Icepi Zero Bot
+After=network.target
+Wants=network-online.target
+
+[Service]
+Restart=always
+Type=simple
+ExecStart=/home/jcm/Projects/icepi-zero-bot/bot.sh
+WorkingDirectory=/home/jcm/Projects/icepi-zero-bot/
+User=jcm
+Group=jcm
+
+[Install]
+WantedBy=multi-user.target
