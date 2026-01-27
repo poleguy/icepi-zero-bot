@@ -22,11 +22,16 @@ guess_hdl() {
         return 0
     fi
 
+    if grep -i -q -E -e '^[[:space:]]*#\[[[:space:]]*no_mangle' $INPUT; then
+        echo "Spade"
+        return 0
+    fi
+
     echo "SystemVerilog"
     return 0
 }
 
-VHDL_INPUT_FILES=("$CODE/top.vhd" "$CODE/dvi_out.vhd" "$CODE/tmds_encoder.vhd" "$CODE/console.vhd")
+VHDL_INPUT_FILES=("$CODE/top.vhd" "$CODE/my_code_wrapper.vhd" "$CODE/dvi_out.vhd" "$CODE/tmds_encoder.vhd" "$CODE/console.vhd")
 
 type=$(guess_hdl)
 case $type in
@@ -40,13 +45,18 @@ case $type in
     cp "$INPUT" "${VERILOG_INPUT[0]}"
     ;;
   SystemVerilog)
-    VERILOG_INPUT=("$OUTPUT/my_code.sv" "$CODE/top.ghdl.v")
+    VERILOG_INPUT=("$OUTPUT/my_code.sv" "$CODE/my_code_wrapper.sv" "$CODE/top.ghdl.v")
     cp "$INPUT" "${VERILOG_INPUT[0]}"
     ;;
   Amaranth)
-    VERILOG_INPUT=("$OUTPUT/my_code.amaranth.v" "$CODE/my_code_wrapper.sv" "$CODE/top.ghdl.v")
+    VERILOG_INPUT=("$OUTPUT/my_code.amaranth.v" "$CODE/my_code_wrapper_parameterless.sv" "$CODE/top.ghdl.v")
     cp "$INPUT" "$OUTPUT/my_code.py"
     PYTHONPATH="$PYTHONPATH:$OUTPUT/" python3 "$SCRIPTDIR/amaranth_build.py" "${VERILOG_INPUT[0]}"
+    ;;
+  Spade)
+    VERILOG_INPUT=("$OUTPUT/my_code.spade.sv" "$CODE/my_code_wrapper_parameterless.sv" "$CODE/top.ghdl.v")
+    cp "$INPUT" "$OUTPUT/my_code.spade"
+    spade -o "${VERILOG_INPUT[0]}" "$OUTPUT/my_code.spade"
     ;;
   *)
     echo "Unknown HDL $type."

@@ -49,7 +49,7 @@ fetch_thread() {
     fi
 
     count="$(jq -r '.posts.posts | length' "$WORKDIR/$id/thread_search.json")"
-    if [ $count -ne 1 ]; then
+    if [ "$count" -ne 1 ]; then
         echo "Ask $id: search found $count posts for $inReplyTo, expected exactly one"
         return 1
     fi
@@ -88,8 +88,10 @@ process_ask() {
         -v "$OUTPUTDIR:/output" -v "$SCRIPTDIR/code:/code:ro" \
         -v "$INPUTFILE:/input/message.txt:ro" -v "$SCRIPTDIR/scripts:/scripts:ro" \
         -v "$OSS_CAD_SUITE:/opt/oss-cad-suite/:ro" \
+        -v "$HOME/.cargo/bin/spade:/opt/spade/bin/spade:ro" \
         -e FPGA_PACKAGE="$FPGA_PACKAGE" \
-        --env-merge PATH='${PATH}:/opt/oss-cad-suite/bin' icepi-zero-bot-synth-container:latest \
+        --env-merge PATH='${PATH}:/opt/oss-cad-suite/bin:/opt/spade/bin' \
+        icepi-zero-bot-synth-container:latest \
         /scripts/synth.sh /input/message.txt /output /code > "$OUTPUTDIR/synth.log" 2>&1
 
     if [ $? -ne 0 ]; then

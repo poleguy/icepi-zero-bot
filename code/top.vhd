@@ -20,7 +20,7 @@ architecture rtl of top is
     );
     end component;
 
-    component my_code is
+    component my_code_wrapper is
         generic(
             WIDTH : integer := 640;
             HEIGHT : integer := 480;
@@ -101,7 +101,7 @@ begin
             blue => b
         );
 
-    code_inst : my_code
+    code_inst : my_code_wrapper
         generic map (
             WIDTH => 640,
             HEIGHT => 480,

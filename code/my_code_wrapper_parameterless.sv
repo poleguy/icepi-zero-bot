@@ -19,10 +19,7 @@ module my_code_wrapper #(
     output logic [23:0] foreground_color,
     output logic [23:0] background_color
 );
-    my_code #(
-        .WIDTH(WIDTH), .HEIGHT(HEIGHT),
-        .CONSOLE_COLUMNS(CONSOLE_COLUMNS), .CONSOLE_ROWS(CONSOLE_ROWS)
-    ) code_inst (
+    my_code code_inst (
         .clk, .rst,
         .px, .py, .hsync, .vsync, .col, .row,
         .char, .foreground_color, .background_color

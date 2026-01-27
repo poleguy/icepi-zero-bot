@@ -1,0 +1,18 @@
+#[no_mangle(all)]
+entity my_code(
+    clk: clock,
+    rst: bool,
+    px: int<32>,
+    py: int<32>,
+    hsync: bool,
+    vsync: bool,
+    col: int<32>,
+    row: int<32>,
+    char: inv &int<32>,
+    foreground_color: inv &uint<24>,
+    background_color: inv &uint<24>,
+) {
+    set char = &0;
+    set foreground_color = &0xFFFFFFu24;
+    set background_color = &0xFF7AFFu24;
+}
