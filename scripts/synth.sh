@@ -33,8 +33,9 @@ guess_hdl() {
 
 VHDL_INPUT_FILES=("$CODE/top.vhd" "$CODE/my_code_wrapper.vhd" "$CODE/dvi_out.vhd" "$CODE/tmds_encoder.vhd" "$CODE/console.vhd")
 
-type=$(guess_hdl)
-case $type in
+hdl=$(guess_hdl)
+echo -n "$hdl" > "$OUTPUT/hdl.txt"
+case "$hdl" in
   VHDL)
     VERILOG_INPUT=("$OUTPUT/my_code.ghdl.v")
     cp "$INPUT" "$OUTPUT/my_code.vhd"
@@ -59,7 +60,7 @@ case $type in
     spade -o "${VERILOG_INPUT[0]}" "$OUTPUT/my_code.spade"
     ;;
   *)
-    echo "Unknown HDL $type."
+    echo "Unknown HDL $hdl."
     exit 1
     ;;
 esac

@@ -4,6 +4,7 @@ FPGA_BOARD=icepi-zero
 FPGA_PACKAGE=CABGA256
 OSS_CAD_SUITE=/opt/oss-cad-suite
 IDLE_DELAY=30
+TAGS="FPGA, Icepi Zero, HDL"
 
 SCRIPTDIR="$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
 
@@ -76,8 +77,8 @@ process_ask() {
             echo "Ask $id: Failed to fetch thread."
             jq --arg id "$id" -n -r \
                 '{"content": "Empty ask without ancestor. Please ensure that your code is in a thread and the ask is replying to it.", "medias":[], "tags": "", "privacy": 10, "content_warning": "", "ask": $id, "mentionedUserIds": []}' \
-                > "$OUTPUTDIR/request.json"
-            curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$OUTPUTDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
+                > "$ASKDIR/request.json"
+            curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$ASKDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
             echo "Finished processing ask $id."
             return 1
         fi
@@ -92,42 +93,42 @@ process_ask() {
         -e FPGA_PACKAGE="$FPGA_PACKAGE" \
         --env-merge PATH='${PATH}:/opt/oss-cad-suite/bin:/opt/spade/bin' \
         icepi-zero-bot-synth-container:latest \
-        /scripts/synth.sh /input/message.txt /output /code > "$OUTPUTDIR/synth.log" 2>&1
+        /scripts/synth.sh /input/message.txt /output /code > "$ASKDIR/synth.log" 2>&1
 
     if [ $? -ne 0 ]; then
         echo "Ask $id: Synthesis failed."
-        jq --arg id "$id" --rawfile content "$OUTPUTDIR/synth.log" -n -r \
+        jq --arg id "$id" --rawfile content "$ASKDIR/synth.log" -n -r \
             '{"content": ("```\n" + $content + "\n```"), "medias":[], "tags": "", "privacy": 10, "content_warning": "Synthesis failed.", "ask": $id, "mentionedUserIds": []}' \
-            > "$OUTPUTDIR/request.json"
-        curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$OUTPUTDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
+            > "$ASKDIR/request.json"
+        curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$ASKDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
         echo "Finished processing ask $id."
         return 1
     fi
 
-    echo "<details><summary>Utilization</summary><table><thead><th><td><b>Cell</b></td><td><b>Used</b></td><td><b>Available</b></td><td><b>Usage</b></td></th></thead><tbody>" > "$OUTPUTDIR/utilization.html"
-    jq -r '.utilization | to_entries[] | select(.value.used > 0) | "<tr><td><code>\(.key)</code></td><td>\(.value.used)</td><td>\(.value.available)</td><td>\(1000*.value.used / .value.available | round/10)%</td></tr>"' "$OUTPUTDIR/report.json" >> "$OUTPUTDIR/utilization.html"
-    echo "</tbody></table></details>" >> "$OUTPUTDIR/utilization.html"
+    echo "<details><summary>Utilization</summary><table><thead><th><td><b>Cell</b></td><td><b>Used</b></td><td><b>Available</b></td><td><b>Usage</b></td></th></thead><tbody>" > "$ASKDIR/utilization.html"
+    jq -r '.utilization | to_entries[] | select(.value.used > 0) | "<tr><td><code>\(.key)</code></td><td>\(.value.used)</td><td>\(.value.available)</td><td>\(1000*.value.used / .value.available | round/10)%</td></tr>"' "$OUTPUTDIR/report.json" >> "$ASKDIR/utilization.html"
+    echo "</tbody></table></details>" >> "$ASKDIR/utilization.html"
 
-    echo "<details><summary>Timing</summary><table><thead><th><td><b>Clock</b></td><td><b>Achieved</b></td><td><b>Constraint</b></td></th></thead><tbody>" > "$OUTPUTDIR/timing.html"
-    jq -r '.fmax | to_entries[] | "<tr><td><code>\(.key)</code></td><td>\(.value.achieved*100 | round/100) MHz</td><td>\(.value.constraint*100 | round/100) MHz</td></tr>"' "$OUTPUTDIR/report.json" >> "$OUTPUTDIR/timing.html"
-    echo "</tbody></table></details>" >> "$OUTPUTDIR/timing.html"
+    echo "<details><summary>Timing</summary><table><thead><th><td><b>Clock</b></td><td><b>Achieved</b></td><td><b>Constraint</b></td></th></thead><tbody>" > "$ASKDIR/timing.html"
+    jq -r '.fmax | to_entries[] | "<tr><td><code>\(.key)</code></td><td>\(.value.achieved*100 | round/100) MHz</td><td>\(.value.constraint*100 | round/100) MHz</td></tr>"' "$OUTPUTDIR/report.json" >> "$ASKDIR/timing.html"
+    echo "</tbody></table></details>" >> "$ASKDIR/timing.html"
 
-    cat "$OUTPUTDIR/utilization.html" "$OUTPUTDIR/timing.html" > "$OUTPUTDIR/report.html"
+    cat "$ASKDIR/utilization.html" "$ASKDIR/timing.html" > "$ASKDIR/report.html"
 
     echo "Ask $id: Flashing bitstream..."
-    "$OSS_CAD_SUITE/bin/openFPGALoader" -b "$FPGA_BOARD" "$OUTPUTDIR/bitstream.bit" > "$OUTPUTDIR/flash.log" 2>&1
+    "$OSS_CAD_SUITE/bin/openFPGALoader" -b "$FPGA_BOARD" "$OUTPUTDIR/bitstream.bit" > "$ASKDIR/flash.log" 2>&1
     if [ $? -ne 0 ]; then
         echo "Ask $id: Flashing failed."
-        jq --arg id "$id" --rawfile content "$OUTPUTDIR/flash.log" -n -r \
+        jq --arg id "$id" --rawfile content "$ASKDIR/flash.log" -n -r \
             '{"content": ("```\n" + $content + "\n```"), "medias":[], "tags": "", "privacy": 10, "content_warning": "Flashing failed.", "ask": $id, "mentionedUserIds": []}' \
-            > "$OUTPUTDIR/request.json"
-        curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$OUTPUTDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
+            > "$ASKDIR/request.json"
+        curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$ASKDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
         echo "Finished processing ask $id."
         return 1
     fi
 
     echo "Ask $id: Recording video..."
-    ffmpeg -f v4l2 -framerate 15 -video_size 640x480 -use_wallclock_as_timestamps 1 -i /dev/video0 -pix_fmt yuv420p -ss 5s -t 30s -preset superfast "$OUTPUTDIR/video.mp4"
+    ffmpeg -f v4l2 -framerate 15 -video_size 640x480 -use_wallclock_as_timestamps 1 -i /dev/video0 -pix_fmt yuv420p -ss 5s -t 30s -preset superfast "$ASKDIR/video.mp4"
 
     echo "Ask $id: Flashing idle bitstream..."
     "$OSS_CAD_SUITE/bin/openFPGALoader" -b "$FPGA_BOARD" "$SCRIPTDIR/idle.bit" > /dev/null
@@ -136,13 +137,13 @@ process_ask() {
     fi
 
     echo "Ask $id: Uploading video..."
-    medias="$(curl --silent -F image="@$OUTPUTDIR/video.mp4" -H "Authorization: Bearer $WAFRN_TOKEN" $WAFRN_URL/api/uploadMedia)"
+    medias="$(curl --silent -F image="@$ASKDIR/video.mp4" -H "Authorization: Bearer $WAFRN_TOKEN" $WAFRN_URL/api/uploadMedia)"
     media="$(echo "$medias" | jq -r --rawfile code "$INPUTFILE" '.[0] | .description = ("Output of the following VHDL code:\n\n" + $code)')"
 
-    jq --arg id "$id" --argjson media "$media" --rawfile report "$OUTPUTDIR/report.html" -n -r \
-        '{"content": ("<b>Sucess!</b>"+$report), "medias":[$media], "tags": "", "privacy": 0, "content_warning": "", "ask": $id, "mentionedUserIds": []}' \
-        > "$OUTPUTDIR/request.json"
-    curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$OUTPUTDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
+    jq --arg id "$id" --argjson media "$media" --rawfile report "$ASKDIR/report.html" --arg tags "$TAGS" --rawfile hdl "$OUTPUTDIR/hdl.txt" -n -r \
+        '{"content": ("<b>Sucess!</b>"+$report), "medias":[$media], "tags": ($tags + ", " + $hdl), "privacy": 0, "content_warning": "", "ask": $id, "mentionedUserIds": []}' \
+        > "$ASKDIR/request.json"
+    curl --silent -X POST -H "Content-Type: application/json" -H "Authorization: Bearer $WAFRN_TOKEN" -d "@$ASKDIR/request.json" "$WAFRN_URL/api/v3/createPost" > /dev/null
 
     echo "Finished processing ask $id."
 }
