@@ -37,9 +37,9 @@ fetch_thread() {
     id="$1"
     INPUTFILE="$2"
 
-    inReplyTo="$(jq -r '.asks[0].apObject | fromjson | .inReplyTo' "$WORKDIR/asks.json")"
-    if [ "$inReplyTo" == "null" ]; then
-        echo "Ask $id: inReplyTo is null"
+    ROOT_ID="$(jq -r '.asks[0].postId' "$WORKDIR/asks.json")"
+    if [ -z "$ROOT_ID" ] || [ "$ROOT_ID" = "null" ]; then
+        echo "Ask $id: postId is null"
         return 1
     fi
 
@@ -59,24 +59,29 @@ fetch_thread() {
     MAX_SLEEP=20
 
     for attempt in $(seq 1 12); do
-        THREAD_JSON="$WORKDIR/$id/context_$attempt.json"
+        THREAD_JSON="$WORKDIR/$id/thread_$attempt.json"
+        : > "$THREAD_JSON"
 
-        curl --silent -H "Authorization: Bearer $WAFRN_TOKEN" \
-             "$WAFRN_URL/api/v1/statuses/$inReplyTo/context" > "$THREAD_JSON"
-        if [ $? -ne 0 ]; then
-            echo "Ask $id: context fetch failed, attempt $attempt"
-            sleep "$SLEEP"
-            continue
-        fi
+        CURRENT="$ROOT_ID"
 
-        THREAD_CONTENT="$(jq -r \
-      '                      (.ancestors + .descendants)
-                                    | sort_by(.created_at)
-                                    | map(.content)' "$THREAD_JSON")"
+        while [ "$CURRENT" != "null" ] && [ -n "$CURRENT" ]; do
+            curl --silent -H "Authorization: Bearer $WAFRN_TOKEN" \
+                "$WAFRN_URL/api/v2/post/$CURRENT" >> "$THREAD_JSON"
+
+            echo >> "$THREAD_JSON"
+
+            CURRENT="$(curl --silent -H "Authorization: Bearer $WAFRN_TOKEN" \
+                "$WAFRN_URL/api/v2/post/$CURRENT" \
+                | jq -r '.post.parentId')"
+        done
+
+        THREAD_CONTENT="$(jq -s -r \
+            'map(.post)
+             | sort_by(.hierarchyLevel, .createdAt)
+             | map(.content)' "$THREAD_JSON")"
 
         COUNT="$(echo "$THREAD_CONTENT" | jq 'length')"
         TEXT="$(echo "$THREAD_CONTENT" | jq -r 'join("\n")')"
-
 
         # Success: reached expected count
         if [ -n "$EXPECTED_COUNT" ] && [ "$COUNT" -ge "$EXPECTED_COUNT" ]; then
@@ -110,7 +115,6 @@ fetch_thread() {
     echo "$TEXT" > "$INPUTFILE"
     echo "Ask $id: fetched thread with $COUNT messages"
 }
-
 process_ask() {
     id="$(jq -r ".asks[0].id" "$WORKDIR/asks.json")"
 
