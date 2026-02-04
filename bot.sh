@@ -43,20 +43,72 @@ fetch_thread() {
         return 1
     fi
 
-    curl --silent -H "Authorization: Bearer $WAFRN_TOKEN" "$WAFRN_URL/api/v2/search?page=0&startScroll=0&term=$inReplyTo" > "$WORKDIR/$id/thread_search.json"
-    if [ $? -ne 0 ]; then
-        echo "Ask $id: search for post $inReplyTo failed"
-        return 1
+    # Optional expected message count from !ask hint
+    EXPECTED_COUNT="$(jq -r '.asks[0].content' "$WORKDIR/asks.json" \
+                         | grep -oE '!ask[[:space:]]+[0-9]+' \
+                             | awk '{print $2}')"
+    if [[ "$EXPECTED_COUNT" =~ ^[0-9]+$ ]]; then
+        echo "Ask $id: expecting $EXPECTED_COUNT messages"
+    else
+        EXPECTED_COUNT=""
     fi
 
-    count="$(jq -r '.posts.posts | length' "$WORKDIR/$id/thread_search.json")"
-    if [ "$count" -ne 1 ]; then
-        echo "Ask $id: search found $count posts for $inReplyTo, expected exactly one"
-        return 1
-    fi
+    THREAD_CONTENT=""
+    PREV_TEXT=""
+    SLEEP=2
+    MAX_SLEEP=20
 
-    jq -r '.posts.posts[0] | [(.ancestors | sort_by(.hierarchyLevel))[].content, .content] | join("\n")' "$WORKDIR/$id/thread_search.json" | hxremove -i 'a.mention' | html2text > "$INPUTFILE"
-    echo "Ask $id: fetched thread"
+    for attempt in $(seq 1 12); do
+        THREAD_JSON="$WORKDIR/$id/context_$attempt.json"
+
+        curl --silent -H "Authorization: Bearer $WAFRN_TOKEN" \
+             "$WAFRN_URL/api/v1/statuses/$inReplyTo/context" > "$THREAD_JSON"
+        if [ $? -ne 0 ]; then
+            echo "Ask $id: context fetch failed, attempt $attempt"
+            sleep "$SLEEP"
+            continue
+        fi
+
+        THREAD_CONTENT="$(jq -r \
+      '                      (.ancestors + .descendants)
+                                    | sort_by(.created_at)
+                                    | map(.content)' "$THREAD_JSON")"
+
+        COUNT="$(echo "$THREAD_CONTENT" | jq 'length')"
+        TEXT="$(echo "$THREAD_CONTENT" | jq -r 'join("\n")')"
+
+
+        # Success: reached expected count
+        if [ -n "$EXPECTED_COUNT" ] && [ "$COUNT" -ge "$EXPECTED_COUNT" ]; then
+            echo "Ask $id: got $COUNT messages (>= expected $EXPECTED_COUNT)"
+            break
+        fi
+
+        # If a count hint exists, do NOT accept stability early
+        if [ -n "$EXPECTED_COUNT" ]; then
+            echo "Ask $id: $COUNT / $EXPECTED_COUNT seen, waiting..."
+        else
+            # No hint: allow stability exit
+            if [ "$TEXT" == "$PREV_TEXT" ]; then
+                echo "Ask $id: thread stabilized at $COUNT messages"
+                break
+            fi
+        fi
+
+        PREV_TEXT="$TEXT"
+
+        echo "Ask $id: only $COUNT messages, retrying in ${SLEEP}s..."
+        sleep "$SLEEP"
+
+        # Exponential backoff
+        if [ "$SLEEP" -lt "$MAX_SLEEP" ]; then
+            SLEEP=$(( SLEEP * 2 ))
+            [ "$SLEEP" -gt "$MAX_SLEEP" ] && SLEEP="$MAX_SLEEP"
+        fi
+    done
+
+    echo "$TEXT" > "$INPUTFILE"
+    echo "Ask $id: fetched thread with $COUNT messages"
 }
 
 process_ask() {
